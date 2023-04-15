@@ -320,6 +320,7 @@ def poisson_mesh_reconstruct(rest, cube, prim_pos, visualize=False):
 
 
 def mesh_reconstruct(pcd, algo="filter", alpha=0.5, depth=8, visualize=False):
+    # pcd: point cloud data
     if algo == "filter":
         point_cloud = pv.PolyData(np.asarray(pcd.points))
         surf = point_cloud.reconstruct_surface()
@@ -397,6 +398,7 @@ def fps(pts, K=300):
 
 
 def crop(rest, cube, prev_pcd, grippers, prim_pos, prim_rot, n_points, back, visualize=False):
+     # 3) Refinement with Physics Prior  &  4) Refinement with Shape Prior:
     if back:
         # print(f'touching status: {is_touching[0]} and {is_touching[1]}')
         prev_points = np.asarray(prev_pcd[-1].points)
@@ -439,6 +441,7 @@ def crop(rest, cube, prev_pcd, grippers, prim_pos, prim_rot, n_points, back, vis
             sampled_pcd.paint_uniform_color([0,0,0])
             o3d_visualize([sampled_pcd])
 
+    # 5) Post-processing:
     selected_points = fps(np.asarray(sampled_pcd.points), n_points)
 
     if visualize:
@@ -595,7 +598,7 @@ def main():
     output_path = os.path.join(cd, '..', '..', 'dataset', f'sample_{task_name}_{time_now}')
 
     ##### REPLACE with the output dir from last step #####
-    data_dir = os.path.join(cd, '..', '..', 'dataset', 'ngrip_fixed_25-Jun-2022-12:32:18.300663')
+    data_dir = os.path.join(cd, '..', '..', 'dataset', 'ngrip_fixed_22-Feb-2023-21:05:55.640816')
     dir_list = sorted(glob.glob(os.path.join(data_dir, '*')))
 
     for vid_idx in range(0, len(dir_list)):
@@ -622,12 +625,14 @@ def main():
             gt_pos = np.load(data_path + f"/{j:03d}_gtp.npy", allow_pickle=True)
             depth = d_and_p[:4]
 
+            # 1) Preprocessing:
             pcd_all = im2threed(rgb, depth, cam_params)
             rest, cube = process_raw_pcd(pcd_all, visualize=visualize)
 
             prim_pos = [np.array(d_and_p[4][:3]), np.array(d_and_p[5][:3])]
             prim_rot = [np.array(d_and_p[4][3:]), np.array(d_and_p[5][3:])]
 
+            # 2) Surface Reconstruction:
             grippers = []
             for k in range(len(prim_pos)):
                 gripper = o3d.geometry.TriangleMesh.create_cylinder(gripper_r, gripper_h)
@@ -647,7 +652,9 @@ def main():
                 cube.paint_uniform_color([0,0,0])
                 o3d_visualize([cube, grippers[0], grippers[1]])
 
+            # 3) - 5)
             if algo == 'crop':
+                # enter here
                 selected_pcd, selected_points = crop(rest, cube, prev_pcd, grippers, prim_pos, prim_rot, n_points, back, visualize=visualize)
             else:
                 cube_points = np.asarray(cube.points)
@@ -661,6 +668,7 @@ def main():
                 selected_pcd, selected_points = patch(cube_new, prev_pcd, grippers, n_points, back, surface=False, visualize=visualize)
 
             prev_pcd.append(selected_pcd)
+            # -----end----- #
 
             emd_loss = em_distance(torch.tensor(selected_points), torch.tensor(gt_pos))
             chamfer_loss = chamfer_distance(torch.tensor(selected_points), torch.tensor(gt_pos))
@@ -699,6 +707,7 @@ def main():
             prev_gt_positions = gt_positions
             prev_prim_ori1 = prim_rot[0]
             prev_prim_ori2 = prim_rot[1]
+            # break
 
         emd_loss_array = np.stack(emd_loss_list)
         chamfer_loss_array = np.stack(chamfer_loss_list)
